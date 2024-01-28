@@ -84,7 +84,6 @@ class BotPlayer(Player):
 
     def compute_best_solar(self, rc: RobotController):
         ally_team = rc.get_ally_team()
-
         def compute_solar_coverage(x, y, pattern, rc: RobotController):
             if not rc.is_placeable(ally_team, int(x + pattern[-1][0]), int(y + pattern[-1][1])):
                 return -1e10
@@ -190,20 +189,9 @@ class BotPlayer(Player):
                     ret = True
         return ret
 
-    def need_2_bomber(self, rc):
-        debris = rc.get_debris(rc.get_ally_team())
-        cnt = 0
-        for d in debris:
-            if d.health > 6 and d.total_cooldown <= 10:
-                cnt += 1
-        if cnt >= 10:
-            return True
-
     def compute_next_target_tower(self, rc: RobotController):
         turns = rc.get_turn()
         if len(self.bombers) == 0:
-            self.next_target_tower = TowerType.BOMBER
-        elif len(self.bombers) < 2 and self.need_2_bomber(rc):
             self.next_target_tower = TowerType.BOMBER
         elif turns <= 600:  # 800
             self.next_target_tower = TowerType.SOLAR_FARM
@@ -250,7 +238,7 @@ class BotPlayer(Player):
                 rc.auto_snipe(tower.id, SnipePriority.FIRST)
             elif tower.type == TowerType.BOMBER:
                 rc.auto_bomb(tower.id)
-
+                
     def can_defense_debris(self, rc: RobotController, debris_config):
         cooldown, health = debris_config
         towers = [tower for tower in rc.get_towers(rc.get_enemy_team()) if tower.type == TowerType.BOMBER]
@@ -268,14 +256,14 @@ class BotPlayer(Player):
             debris_x, debris_y = self.map.path[progress]
             for tower in towers:
                 if tower.type == TowerType.BOMBER \
-                        and tower.current_cooldown <= 0 \
-                        and (tower.x - debris_x) ** 2 + (tower.y - debris_y) ** 2 <= TowerType.BOMBER.range:
+                    and tower.current_cooldown <= 0 \
+                    and (tower.x - debris_x)**2 + (tower.y - debris_y)**2 <= TowerType.BOMBER.range:
                     current_health -= TowerType.BOMBER.damage
                     if current_health <= 0:
                         return True
                     tower.current_cooldown = TowerType.BOMBER.cooldown
         return True
-
+        
     def send_debris(self, rc: RobotController):
         if rc.get_turn() % 249 < 200:
             return
@@ -284,6 +272,7 @@ class BotPlayer(Player):
         for health in reversed(sorted(health_cand)):
             for cooldown in range(1, 16):
                 if rc.can_send_debris(cooldown, health) \
-                        and rc.get_debris_cost(cooldown, health) <= cost_limit \
-                        and not self.can_defense_debris(rc, (cooldown, health)):
+                    and rc.get_debris_cost(cooldown, health) <= cost_limit \
+                    and not self.can_defense_debris(rc, (cooldown, health)):
                     rc.send_debris(cooldown, health)
+                    
