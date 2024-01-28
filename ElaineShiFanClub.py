@@ -31,6 +31,7 @@ class BotPlayer(Player):
         self.is_beginning_4_gunships_1_bomber = False
         self.max_cd_to_compute = min(100, 10000 // len(self.map.path) + 1)
         self.guaranteed_bomber_damage = [[0 for _ in range(len(self.map.path))] for _ in range(self.max_cd_to_compute + 1)]
+        self.enemy_has_solar_farm_ = False
 
     def init_grid_coverage(self):
         path_len = len(self.map.path)
@@ -387,8 +388,11 @@ class BotPlayer(Player):
         return True
 
     def enemy_has_solar_farm(self, rc : RobotController):
+        if self.enemy_has_solar_farm_:
+            return True
         for tower in rc.get_towers(rc.get_enemy_team()):
             if tower.type == TowerType.SOLAR_FARM:
+                self.enemy_has_solar_farm_ = True
                 return True
         return False
 
