@@ -26,6 +26,7 @@ class BotPlayer(Player):
         self.init_grid_coverage()
         self.best_solar_locations = []
         self.next_target_tower = TowerType.BOMBER
+        self.is_beginning_2_gunships_1_bomber = False
 
     def init_grid_coverage(self):
         path_len = len(self.map.path)
@@ -113,7 +114,9 @@ class BotPlayer(Player):
     def play_turn(self, rc: RobotController):
         if rc.get_turn() == 1:
             self.compute_best_solar(rc)
-            exit()
+        if rc.get_turn() <= 1200 and not self.is_beginning_2_gunships_1_bomber:
+            if self.beginning_2_gunships_1_bomber(rc):
+                self.is_beginning_2_gunships_1_bomber = True
         self.send_debris(rc)
         self.compute_next_target_tower(rc)
         self.build_towers(rc)
@@ -190,10 +193,25 @@ class BotPlayer(Player):
                     ret = True
         return ret
 
+    def beginning_2_gunships_1_bomber(self, rc: RobotController):
+        debris = rc.get_debris(rc.get_ally_team())
+        turns = rc.get_turn()
+        if turns >= 502 and len(rc.get_towers(rc.get_enemy_team())) == 0:  # have 2010 balance and not building anything
+            return True
+        cnt = 0
+        for d in debris:
+            if 25 + 6 < d.health <= 25 + 25 + 6:  # 2 gunships, 1 bomber
+                cnt += 1
+        if cnt >= 3:
+            return True
+        return False
+
     def compute_next_target_tower(self, rc: RobotController):
         turns = rc.get_turn()
         if len(self.bombers) == 0:
             self.next_target_tower = TowerType.BOMBER
+        elif turns <= 1200 and self.is_beginning_2_gunships_1_bomber and len(self.gunships) < 2:
+            self.next_target_tower = TowerType.GUNSHIP
         elif turns <= 600:  # 800
             self.next_target_tower = TowerType.SOLAR_FARM
         elif len(self.gunships) == 0:
