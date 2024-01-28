@@ -32,6 +32,8 @@ class BotPlayer(Player):
         self.max_cd_to_compute = min(100, 10000 // len(self.map.path) + 1)
         self.guaranteed_bomber_damage = [[0 for _ in range(len(self.map.path))] for _ in range(self.max_cd_to_compute + 1)]
         self.enemy_has_solar_farm_ = False
+        self.last_debris = None # (cooldown, health, turn)
+        self.send_debirs_interval = 200
 
     def init_grid_coverage(self):
         path_len = len(self.map.path)
@@ -397,21 +399,31 @@ class BotPlayer(Player):
         return False
 
     def send_debris(self, rc: RobotController):
-        if rc.get_turn() <= 269 or (rc.get_turn() <= 5000 and rc.get_turn() % 249 < 200):
+        if rc.get_turn() % self.send_debirs_interval < self.send_debirs_interval * 0.5:
+            return
+        if rc.get_turn() <= 269:
+            return
+        if self.last_debris != None and self.last_debris[2] >= rc.get_turn() - self.send_debirs_interval:
+            if rc.can_send_debris(self.last_debris[0], self.last_debris[1]):
+                rc.send_debris(self.last_debris[0], self.last_debris[1])
             return
         if not self.enemy_has_solar_farm(rc):
             return
         # (1, 51) costs 220
         # (2, 76) costs 241
+        max_cooldown = 6
         cost_limit = 241 if rc.get_turn() <= 1000 else rc.get_balance(rc.get_ally_team()) // 10 if rc.get_turn() <= 5000 else rc.get_balance(rc.get_ally_team())
-        health_cand = [25 * x + 1 for x in range(2, 100)]
+        health_cand = [50 * x + 1 for x in range(1, 50)]
         for health in reversed(sorted(health_cand)):
-            if rc.get_debris_cost(15, health) > cost_limit:
+            if rc.get_debris_cost(max_cooldown, health) > cost_limit:
                 continue
             if rc.get_balance(rc.get_ally_team()) < 200:  # minimum for a debris
                 break
-            for cooldown in range(1, 16):
+            for cooldown in range(1, max_cooldown + 1):
                 if rc.can_send_debris(cooldown, health) \
                         and rc.get_debris_cost(cooldown, health) <= cost_limit \
                         and not self.can_defense_debris(rc, (cooldown, health)):
+                    self.last_debris = (cooldown, health, rc.get_turn())
                     rc.send_debris(cooldown, health)
+                    self.send_debirs_interval *= 1.2
+                    return
