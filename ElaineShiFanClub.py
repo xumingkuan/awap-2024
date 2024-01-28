@@ -175,6 +175,7 @@ class BotPlayer(Player):
         self.opponent_max_towers = max(self.opponent_max_towers, current_opponent_towers)
         if rc.get_turn() <= 550 + 14 * int(self.path_len) and current_opponent_towers <= self.opponent_max_towers - 2:
             self.sell_solars(rc)
+            self.max_cd_to_compute = 1
             self.sold_solar_turn = rc.get_turn()
         if rc.get_turn() % 9 == 0 or (self.sold_solar_turn != -1 and rc.get_turn() - self.sold_solar_turn <= 100):
             if rc.get_turn() <= 1200 and not self.is_beginning_2_gunships_1_bomber:
