@@ -186,8 +186,11 @@ class BotPlayer(Player):
             if rc.get_turn() <= 2000 and not self.is_beginning_4_gunships_1_bomber:
                 if self.beginning_4_gunships_1_bomber(rc):
                     self.is_beginning_4_gunships_1_bomber = True
-        if rc.get_turn() >= 4000 and (rc.get_turn() % 50 == 0 or rc.get_balance(rc.get_ally_team()) >= 5000):
+        if rc.get_turn() >= 4000 and (rc.get_turn() % ((3000 // (len(self.solars) + 1)) + 1) == 0 or (
+                rc.get_balance(rc.get_ally_team()) >= 5000 and rc.get_turn() % ((100 // (len(self.solars) + 1)) + 1) == 0)):
             self.sell_worst_solar(rc)
+            if len(self.solars) < 10 and rc.get_balance(rc.get_ally_team()) >= 3000 and rc.get_turn() % 7 == 0:
+                self.adjust_reinforcer(rc)
         self.compute_next_target_tower(rc)
         self.build_towers(rc)
         self.towers_attack(rc)
@@ -201,6 +204,19 @@ class BotPlayer(Player):
             if self.gunship_coverage[self.solars[i][0], self.solars[i][1]] > self.gunship_coverage[self.solars[solar_id][0], self.solars[solar_id][1]]:
                 solar_id = i
         self.sell_solar(rc, self.solars[solar_id][0], self.solars[solar_id][1])
+
+    def adjust_reinforcer(self, rc: RobotController):
+        self.compute_best_reinforcer()
+        for b in self.reinforcers:
+            if self.reinforcer_coverage[b[0], b[1]] + 1e8 + 2000 < self.gunship_coverage[b[0], b[1]] ** 1.5:
+                x = int(b[0])
+                y = int(b[1])
+                self.reinforcers.remove((x, y))
+                t = self.find_tower(rc, x, y)
+                rc.sell_tower(t.id)
+                self.tower_grid[x][y] = None
+                self.insert_to_gunship(x, y)
+                self.insert_to_bomber(x, y)
 
     def update_guaranteed_bomber_damage(self, x, y, multiplier=1):
         # O(|self.max_cd_to_compute| * |len(self.map.path)|)
@@ -404,6 +420,13 @@ class BotPlayer(Player):
         if cnt >= 3:
             return True
         return False
+
+    def safe_to_build_solar_first(self, rc: RobotController):
+        while len(self.bomber_locations) > 0 and not self.is_placeable(int(self.bomber_locations[0][0]), int(self.bomber_locations[0][1])):
+            self.bomber_locations = self.bomber_locations[1:]
+        if len(self.bomber_locations) == 0:
+            return False
+        return False  # TODO
 
     def compute_next_target_tower(self, rc: RobotController):
         turns = rc.get_turn()
