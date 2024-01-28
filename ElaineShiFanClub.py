@@ -282,6 +282,8 @@ class BotPlayer(Player):
             self.bomber_locations = self.bomber_locations[:index] + [(x, y)] + self.bomber_locations[index:]
 
     def sell_solar(self, rc: RobotController, x, y):
+        x = int(x)
+        y = int(y)
         self.solars.remove((x, y))
         t = self.find_tower(rc, x, y)
         rc.sell_tower(t.id)
@@ -296,6 +298,7 @@ class BotPlayer(Player):
             self.tower_grid[s[0]][s[1]] = None
             self.insert_to_gunship(s[0], s[1])
             self.insert_to_bomber(s[0], s[1])
+        self.solars.clear()
         self.compute_best_solar(rc)
 
     def find_tower(self, rc: RobotController, x, y):
