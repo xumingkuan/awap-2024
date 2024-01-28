@@ -23,6 +23,10 @@ class BotPlayer(Player):
         self.reinforcers = []
         self.grid_to_path = {}
         self.bomber_pattern = []
+        self.reinforcer_pattern = []
+        self.reinforcer_coverage = None
+        self.best_reinforcer_loc = None
+        self.tower_grid = None
         self.init_grid_coverage()
         self.best_solar_locations = []
         self.next_target_tower = TowerType.BOMBER
@@ -35,9 +39,13 @@ class BotPlayer(Player):
         self.last_debris = None # (cooldown, health, turn)
         self.send_debirs_interval = 200
 
+    def is_placeable(self, x, y):
+        return self.map.is_space(int(x), int(y)) and self.tower_grid[x][y] is None
+
     def init_grid_coverage(self):
         path_len = len(self.map.path)
         path_grid = np.zeros(shape=(self.map.width, self.map.height), dtype=float)
+        self.tower_grid = [[None for _ in range(self.map.height)] for _ in range(self.map.width)]
 
         def compute_bomber_coverage(x, y, path_grid_colsum):
             # sqrt(10)
@@ -96,17 +104,23 @@ class BotPlayer(Player):
                     if not (i == 0 and j == 0):
                         self.bomber_pattern.append((i, j))
 
+        for i in range(-2, 3):
+            for j in range(-2, 3):
+                if i * i + j * j <= 5:
+                    if not (i == 0 and j == 0):
+                        self.reinforcer_pattern.append((i, j))
+
     def compute_best_solar(self, rc: RobotController):
         ally_team = rc.get_ally_team()
 
         def compute_solar_coverage(x, y, pattern, rc: RobotController):
-            if not rc.is_placeable(ally_team, int(x + pattern[-1][0]), int(y + pattern[-1][1])):
+            if not self.is_placeable(int(x + pattern[-1][0]), int(y + pattern[-1][1])):
                 return -1e10
-            if not rc.is_placeable(ally_team, int(x + pattern[-2][0]), int(y + pattern[-2][1])):
+            if not self.is_placeable(int(x + pattern[-2][0]), int(y + pattern[-2][1])):
                 return -1e10
             ret = 0.0
             for p in pattern:
-                if rc.is_placeable(ally_team, int(x + p[0]), int(y + p[1])):
+                if self.is_placeable(int(x + p[0]), int(y + p[1])):
                     ret += 1000 - self.bomber_coverage[x + p[0], y + p[1]] ** 2 - self.gunship_coverage[x + p[0], y + p[1]] ** 1.5
             return ret
 
@@ -124,6 +138,24 @@ class BotPlayer(Player):
         if result_value < 900:
             # do not build solar any more
             self.best_solar_locations = []
+
+    def compute_best_reinforcer(self):
+        self.reinforcer_coverage = np.zeros(shape=(self.map.width, self.map.height), dtype=float)
+        for b in self.bombers:
+            current_value = 1000 + self.bomber_coverage[b[0], b[1]] ** 2
+            self.reinforcer_coverage[b[0], b[1]] -= current_value * 15
+            for t in self.reinforcer_pattern:
+                if self.map.is_space(int(b[0] + t[0]), int(b[1] + t[1])):
+                    self.reinforcer_coverage[b[0] + t[0], b[1] + t[1]] += current_value
+        for b in self.gunships:
+            current_value = 1000 + self.gunship_coverage[b[0], b[1]] ** 1.5
+            self.reinforcer_coverage[b[0], b[1]] -= current_value * 15
+            for t in self.reinforcer_pattern:
+                if self.map.is_space(int(b[0] + t[0]), int(b[1] + t[1])):
+                    self.reinforcer_coverage[b[0] + t[0], b[1] + t[1]] += current_value
+        for b in self.reinforcers:
+            self.reinforcer_coverage[b[0], b[1]] = -1e10  # already reinforcer
+        self.best_reinforcer_loc = np.unravel_index(np.argmax(self.reinforcer_coverage, axis=None), self.reinforcer_coverage.shape)
 
     def play_turn(self, rc: RobotController):
         if rc.get_turn() == 1:
@@ -169,6 +201,7 @@ class BotPlayer(Player):
         if rc.can_build_tower(TowerType.BOMBER, x, y):
             rc.build_tower(TowerType.BOMBER, x, y)
             self.bombers.append((x, y))
+            self.tower_grid[x][y] = TowerType.BOMBER
             self.update_guaranteed_bomber_damage(x, y)
             return True
         return False
@@ -179,6 +212,7 @@ class BotPlayer(Player):
         if rc.can_build_tower(TowerType.GUNSHIP, x, y):
             rc.build_tower(TowerType.GUNSHIP, x, y)
             self.gunships.append((x, y))
+            self.tower_grid[x][y] = TowerType.GUNSHIP
             return True
         return False
 
@@ -188,8 +222,12 @@ class BotPlayer(Player):
         if rc.can_build_tower(TowerType.SOLAR_FARM, x, y):
             rc.build_tower(TowerType.SOLAR_FARM, x, y)
             self.solars.append((x, y))
+            self.tower_grid[x][y] = TowerType.SOLAR_FARM
             return True
         return False
+
+    def find_tower(self, rc: RobotController, x, y):
+        return rc.sense_towers_within_radius_squared(rc.get_ally_team(), x, y, 0)[0]
 
     def build_reinforcer(self, rc: RobotController, x, y):
         x = int(x)
@@ -197,12 +235,38 @@ class BotPlayer(Player):
         if rc.can_build_tower(TowerType.REINFORCER, x, y):
             rc.build_tower(TowerType.REINFORCER, x, y)
             self.reinforcers.append((x, y))
+            self.tower_grid[x][y] = TowerType.REINFORCER
             return True
+        elif rc.get_balance(rc.get_ally_team()) >= 1400 and self.tower_grid[x][y] is not None:
+            if self.tower_grid[x][y] == TowerType.GUNSHIP and rc.get_balance(rc.get_ally_team()) >= 2200:
+                self.gunships.remove((x, y))
+                t = self.find_tower(rc, x, y)
+                rc.sell_tower(t.id)
+                rc.build_tower(TowerType.REINFORCER, x, y)
+                self.reinforcers.append((x, y))
+                self.tower_grid[x][y] = TowerType.REINFORCER
+                return True
+            elif self.tower_grid[x][y] == TowerType.BOMBER and rc.get_balance(rc.get_ally_team()) >= 1600:
+                self.bombers.remove((x, y))
+                t = self.find_tower(rc, x, y)
+                rc.sell_tower(t.id)
+                rc.build_tower(TowerType.REINFORCER, x, y)
+                self.reinforcers.append((x, y))
+                self.tower_grid[x][y] = TowerType.REINFORCER
+                return True
+            elif self.tower_grid[x][y] == TowerType.SOLAR_FARM and rc.get_balance(rc.get_ally_team()) >= 1400:
+                self.solars.remove((x, y))
+                t = self.find_tower(rc, x, y)
+                rc.sell_tower(t.id)
+                rc.build_tower(TowerType.REINFORCER, x, y)
+                self.reinforcers.append((x, y))
+                self.tower_grid[x][y] = TowerType.REINFORCER
+                return True
         return False
 
     def greedy_build_bomber(self, rc: RobotController):
         ally_team = rc.get_ally_team()
-        while len(self.bomber_locations) > 0 and not rc.is_placeable(ally_team, int(self.bomber_locations[0][0]), int(self.bomber_locations[0][1])):
+        while len(self.bomber_locations) > 0 and not self.is_placeable(int(self.bomber_locations[0][0]), int(self.bomber_locations[0][1])):
             self.bomber_locations = self.bomber_locations[1:]
         if len(self.bomber_locations) > 0:
             if self.build_bomber(rc, self.bomber_locations[0][0], self.bomber_locations[0][1]):
@@ -211,7 +275,7 @@ class BotPlayer(Player):
 
     def greedy_build_gunship(self, rc: RobotController):
         ally_team = rc.get_ally_team()
-        while len(self.gunship_locations) > 0 and not rc.is_placeable(ally_team, int(self.gunship_locations[0][0]), int(self.gunship_locations[0][1])):
+        while len(self.gunship_locations) > 0 and not self.is_placeable(int(self.gunship_locations[0][0]), int(self.gunship_locations[0][1])):
             self.gunship_locations = self.gunship_locations[1:]
         if len(self.gunship_locations) > 0:
             if self.build_gunship(rc, self.gunship_locations[0][0], self.gunship_locations[0][1]):
@@ -267,7 +331,7 @@ class BotPlayer(Player):
 
     def compute_next_target_tower(self, rc: RobotController):
         turns = rc.get_turn()
-        if len(self.bombers) == 0:
+        if turns <= 3000 and len(self.bombers) == 0:
             self.next_target_tower = TowerType.BOMBER
         elif turns <= 1200 and self.is_beginning_2_gunships_1_bomber and len(self.gunships) < 2:
             self.next_target_tower = TowerType.GUNSHIP
@@ -275,27 +339,27 @@ class BotPlayer(Player):
             self.next_target_tower = TowerType.GUNSHIP
         elif turns <= 2000 and self.is_beginning_4_gunships_1_bomber and len(self.gunships) < 4:
             self.next_target_tower = TowerType.GUNSHIP
-        elif len(rc.get_towers(rc.get_enemy_team())) == 0:
+        elif turns <= 3000 and len(rc.get_towers(rc.get_enemy_team())) == 0:
             self.next_target_tower = TowerType.REINFORCER  # auto bomber or gunship
         elif turns <= 600:  # 800
             self.next_target_tower = TowerType.SOLAR_FARM
-        elif len(self.gunships) == 0:
+        elif turns <= 3000 and len(self.gunships) == 0:
             self.next_target_tower = TowerType.GUNSHIP
-        elif turns <= 1200:  # 1500
+        elif turns <= 1200 and len(self.best_solar_locations) > 0:  # 1500
             self.next_target_tower = TowerType.SOLAR_FARM
-        elif len(self.bombers) < 2:
+        elif turns <= 3000 and len(self.bombers) < 2:
             self.next_target_tower = TowerType.BOMBER
-        elif len(self.gunships) < 3:
+        elif turns <= 3000 and len(self.gunships) < 3:
             self.next_target_tower = TowerType.GUNSHIP
-        elif turns <= 2000:  # 2400
+        elif turns <= 2000 and len(self.best_solar_locations) > 0:  # 2400
             self.next_target_tower = TowerType.SOLAR_FARM
-        elif len(self.bombers) < 11:
+        elif turns <= 3000 and len(self.bombers) < 11:
             self.next_target_tower = TowerType.BOMBER
         elif turns <= 3030:  # 3200
             self.next_target_tower = TowerType.SOLAR_FARM
         elif len(self.gunships) < 4:
             self.next_target_tower = TowerType.GUNSHIP
-        elif len(self.gunships) >= len(self.solars) * 2 and len(self.best_solar_locations) > 0:
+        elif turns <= 3450 and len(self.best_solar_locations) > 0:
             self.next_target_tower = TowerType.SOLAR_FARM
         else:
             self.next_target_tower = TowerType.REINFORCER
@@ -303,14 +367,24 @@ class BotPlayer(Player):
     def replace_with_reinforcers_or_build_gunship(self, rc: RobotController):
         if len(rc.get_towers(rc.get_enemy_team())) == 0:
             # auto bomber or gunship
-            while len(self.bomber_locations) > 0 and not rc.is_placeable(rc.get_ally_team(), int(self.bomber_locations[0][0]), int(self.bomber_locations[0][1])):
+            while len(self.bomber_locations) > 0 and not self.is_placeable(int(self.bomber_locations[0][0]), int(self.bomber_locations[0][1])):
                 self.bomber_locations = self.bomber_locations[1:]
             if len(self.bomber_locations) > 0 and self.bomber_coverage[self.bomber_locations[0][0], self.bomber_locations[0][1]] >= 10:
                 return self.greedy_build_bomber(rc)  # build bomber if it covers at least 10 tiles
             else:
                 return self.greedy_build_gunship(rc)
         # endgame
-        return self.greedy_build_gunship(rc)
+        if self.best_reinforcer_loc is None:
+            self.compute_best_reinforcer()
+        if self.reinforcer_coverage[self.best_reinforcer_loc] > 0:
+            # build reinforcer
+            if self.build_reinforcer(rc, self.best_reinforcer_loc[0], self.best_reinforcer_loc[1]):
+                self.compute_best_reinforcer()
+                return True
+            else:
+                return False
+        else:
+            return self.greedy_build_gunship(rc)
 
     def build_towers(self, rc: RobotController):
         if self.next_target_tower == TowerType.BOMBER:
@@ -389,7 +463,7 @@ class BotPlayer(Player):
                     tower.current_cooldown = TowerType.BOMBER.cooldown
         return True
 
-    def enemy_has_solar_farm(self, rc : RobotController):
+    def enemy_has_solar_farm(self, rc: RobotController):
         if self.enemy_has_solar_farm_:
             return True
         for tower in rc.get_towers(rc.get_enemy_team()):
