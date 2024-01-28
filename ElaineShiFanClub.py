@@ -562,8 +562,9 @@ class BotPlayer(Player):
     def send_debris(self, rc: RobotController):
         turn = rc.get_turn()
         cooldown = 5
+        threshold = max(20000, self.map.path_length * 900)
         if turn >= 3700 and turn % 200 < 100:
-            if rc.get_balance(rc.get_ally_team()) >= 100000:
+            if rc.get_balance(rc.get_ally_team()) >= threshold:
                 self.start_send_debris = True
             if not self.start_send_debris:
                 return
