@@ -9,6 +9,7 @@ from src.map import Map
 class BotPlayer(Player):
     def __init__(self, map: Map):
         self.map = map
+        self.path_len = 0.0
         self.bomber_coverage = None
         self.bomber_locations = None
         self.gunship_coverage = None
@@ -36,15 +37,19 @@ class BotPlayer(Player):
         self.max_cd_to_compute = min(100, 10000 // len(self.map.path) + 1)
         self.guaranteed_bomber_damage = [[0 for _ in range(len(self.map.path))] for _ in range(self.max_cd_to_compute + 1)]
         self.enemy_has_solar_farm_ = False
-        self.last_debris = None # (cooldown, health, turn)
+        self.last_debris = None  # (cooldown, health, turn)
         self.send_debirs_interval = 200
+<<<<<<< HEAD
         self.start_send_debris = False
+=======
+        self.threat = 0
+>>>>>>> bd59920a670e12988066519b94cfdf66dd5481af
 
     def is_placeable(self, x, y):
         return self.map.is_space(int(x), int(y)) and self.tower_grid[x][y] is None
 
     def init_grid_coverage(self):
-        path_len = len(self.map.path)
+        self.path_len = len(self.map.path)
         path_grid = np.zeros(shape=(self.map.width, self.map.height), dtype=float)
         self.tower_grid = [[None for _ in range(self.map.height)] for _ in range(self.map.width)]
 
@@ -75,8 +80,8 @@ class BotPlayer(Player):
                     ret += path_grid_colsum[x + dx, min(y + dy, self.map.height - 1)] - (0 if y - dy - 1 < 0 else path_grid_colsum[x + dx, y - dy - 1])
             return ret
 
-        path_extra_value = 0.1 / path_len ** 2  # we want to use bomber to kill debris earlier in the path, and use gunship to kill them later
-        remaining_len = path_len - 1
+        path_extra_value = 0.1 / self.path_len ** 2  # we want to use bomber to kill debris earlier in the path, and use gunship to kill them later
+        remaining_len = self.path_len - 1
         for t in self.map.path:
             path_grid[t[0], t[1]] = 1.0 + path_extra_value * remaining_len
             remaining_len -= 1
@@ -142,20 +147,26 @@ class BotPlayer(Player):
 
     def compute_best_reinforcer(self):
         self.reinforcer_coverage = np.zeros(shape=(self.map.width, self.map.height), dtype=float)
+        for i in range(self.map.width):
+            for j in range(self.map.height):
+                self.reinforcer_coverage[i, j] = -4000 - self.bomber_coverage[i, j] ** 2 - self.gunship_coverage[i, j] ** 1.5
         for b in self.bombers:
             current_value = 1000 + self.bomber_coverage[b[0], b[1]] ** 2
-            self.reinforcer_coverage[b[0], b[1]] -= current_value * 15
+            self.reinforcer_coverage[b[0], b[1]] -= current_value / 10.0
             for t in self.reinforcer_pattern:
                 if self.map.is_space(int(b[0] + t[0]), int(b[1] + t[1])):
                     self.reinforcer_coverage[b[0] + t[0], b[1] + t[1]] += current_value
         for b in self.gunships:
             current_value = 1000 + self.gunship_coverage[b[0], b[1]] ** 1.5
-            self.reinforcer_coverage[b[0], b[1]] -= current_value * 15
+            self.reinforcer_coverage[b[0], b[1]] -= current_value / 10.0
             for t in self.reinforcer_pattern:
                 if self.map.is_space(int(b[0] + t[0]), int(b[1] + t[1])):
                     self.reinforcer_coverage[b[0] + t[0], b[1] + t[1]] += current_value
         for b in self.reinforcers:
-            self.reinforcer_coverage[b[0], b[1]] = -1e10  # already reinforcer
+            self.reinforcer_coverage[b[0], b[1]] -= 1e8  # already reinforcer
+            for t in self.reinforcer_pattern:
+                if self.map.is_space(int(b[0] + t[0]), int(b[1] + t[1])):
+                    self.reinforcer_coverage[b[0] + t[0], b[1] + t[1]] -= 700  # diminishing return
         self.best_reinforcer_loc = np.unravel_index(np.argmax(self.reinforcer_coverage, axis=None), self.reinforcer_coverage.shape)
 
     def play_turn(self, rc: RobotController):
@@ -346,6 +357,8 @@ class BotPlayer(Player):
             self.next_target_tower = TowerType.SOLAR_FARM
         elif turns <= 3000 and len(self.gunships) == 0:
             self.next_target_tower = TowerType.GUNSHIP
+        elif turns <= 3000 and self.threat / len(self.gunships) > 100000:
+            self.next_target_tower = TowerType.GUNSHIP
         elif turns <= 1200 and len(self.best_solar_locations) > 0:  # 1500
             self.next_target_tower = TowerType.SOLAR_FARM
         elif turns <= 3000 and len(self.bombers) < 2:
@@ -358,9 +371,11 @@ class BotPlayer(Player):
             self.next_target_tower = TowerType.BOMBER
         elif turns <= 3030:  # 3200
             self.next_target_tower = TowerType.SOLAR_FARM
-        elif len(self.gunships) < 4:
+        elif turns <= 3450 and len(self.gunships) < 4:
             self.next_target_tower = TowerType.GUNSHIP
-        elif turns <= 3450 and len(self.best_solar_locations) > 0:
+        elif turns <= 3450 and self.threat / len(self.gunships) > 50000:
+            self.next_target_tower = TowerType.GUNSHIP
+        elif turns <= 3450 and len(self.best_solar_locations) > 0 and len(self.solars) / self.map.width / self.map.height < 0.2:
             self.next_target_tower = TowerType.SOLAR_FARM
         else:
             self.next_target_tower = TowerType.REINFORCER
@@ -416,12 +431,13 @@ class BotPlayer(Player):
                 rc.auto_bomb(tower.id)
         if len(self.gunships) == 0:
             return
+        self.threat = 0.0  # clear last turn
         debris = rc.get_debris(rc.get_ally_team())
         debris_to_snipe = {}
         for d in debris:
             health = d.health - self.guaranteed_bomber_damage[min(d.total_cooldown, self.max_cd_to_compute)][d.progress]
             if health > 0:  # cannot be bombed
-                debris_to_snipe[d.id] = (d.progress, health)
+                debris_to_snipe[d.id] = (d.progress, health, d.total_cooldown)
         for tower in towers:
             if tower.type == TowerType.GUNSHIP and tower.current_cooldown <= 0:
                 snipe_now = None
@@ -437,7 +453,9 @@ class BotPlayer(Player):
                         # remove this debris
                         debris_to_snipe.pop(snipe_now)
                     else:
-                        debris_to_snipe[snipe_now] = (best_val[0], best_val[1] - TowerType.GUNSHIP.damage)
+                        debris_to_snipe[snipe_now] = (best_val[0], best_val[1] - TowerType.GUNSHIP.damage, best_val[2])
+        for k, v in debris_to_snipe.items():
+            self.threat += max(1, v[1] * 100 - (self.path_len - v[0] - 1) * v[2])
 
     def can_defense_debris(self, rc: RobotController, debris_config):
         cooldown, health = debris_config
