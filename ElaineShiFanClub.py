@@ -186,10 +186,21 @@ class BotPlayer(Player):
             if rc.get_turn() <= 2000 and not self.is_beginning_4_gunships_1_bomber:
                 if self.beginning_4_gunships_1_bomber(rc):
                     self.is_beginning_4_gunships_1_bomber = True
+        if rc.get_turn() >= 4000 and (rc.get_turn() % 50 == 0 or rc.get_balance(rc.get_ally_team()) >= 5000):
+            self.sell_worst_solar(rc)
         self.compute_next_target_tower(rc)
         self.build_towers(rc)
         self.towers_attack(rc)
         self.send_debris(rc)
+
+    def sell_worst_solar(self, rc: RobotController):
+        if len(self.solars) == 0:
+            return False
+        solar_id = 0
+        for i in range(1, len(self.solars)):
+            if self.gunship_coverage[self.solars[i][0], self.solars[i][1]] > self.gunship_coverage[self.solars[solar_id][0], self.solars[solar_id][1]]:
+                solar_id = i
+        self.sell_solar(rc, self.solars[solar_id][0], self.solars[solar_id][1])
 
     def update_guaranteed_bomber_damage(self, x, y):
         # O(|self.max_cd_to_compute| * |len(self.map.path)|)
@@ -242,17 +253,50 @@ class BotPlayer(Player):
             return True
         return False
 
+    def insert_to_gunship(self, x, y):
+        if len(self.gunship_locations) == 0:
+            self.gunship_locations = [(x, y)]
+            return
+        index = len(self.gunship_locations)
+        for i in range(len(self.gunship_locations)):
+            if self.gunship_coverage[self.gunship_locations[i][0], self.gunship_locations[i][1]] < self.gunship_coverage[x, y]:
+                index = i
+                break
+        if index == len(self.gunship_locations):
+            self.gunship_locations = self.gunship_locations + [(x, y)]
+        else:
+            self.gunship_locations = self.gunship_locations[:index] + [(x, y)] + self.gunship_locations[index:]
+
+    def insert_to_bomber(self, x, y):
+        if len(self.bomber_locations) == 0:
+            self.bomber_locations = [(x, y)]
+            return
+        index = len(self.bomber_locations)
+        for i in range(len(self.bomber_locations)):
+            if self.bomber_coverage[self.bomber_locations[i][0], self.bomber_locations[i][1]] < self.bomber_coverage[x, y]:
+                index = i
+                break
+        if index == len(self.bomber_locations):
+            self.bomber_locations = self.bomber_locations + [(x, y)]
+        else:
+            self.bomber_locations = self.bomber_locations[:index] + [(x, y)] + self.bomber_locations[index:]
+
     def sell_solar(self, rc: RobotController, x, y):
         self.solars.remove((x, y))
         t = self.find_tower(rc, x, y)
         rc.sell_tower(t.id)
         self.tower_grid[x][y] = None
+        self.insert_to_gunship(x, y)
+        self.insert_to_bomber(x, y)
 
     def sell_solars(self, rc):
         for s in self.solars:
             t = self.find_tower(rc, s[0], s[1])
             rc.sell_tower(t.id)
             self.tower_grid[s[0]][s[1]] = None
+            self.insert_to_gunship(s[0], s[1])
+            self.insert_to_bomber(s[0], s[1])
+        self.compute_best_solar(rc)
 
     def find_tower(self, rc: RobotController, x, y):
         return rc.sense_towers_within_radius_squared(rc.get_ally_team(), x, y, 0)[0]
@@ -376,6 +420,8 @@ class BotPlayer(Player):
         elif turns <= 3000 and len(self.gunships) == 0:
             self.next_target_tower = TowerType.GUNSHIP
         elif turns <= 3000 and self.threat / len(self.gunships) > 100000:
+            if self.threat / len(self.gunships) > 1000000:
+                self.sell_worst_solar(rc)
             self.next_target_tower = TowerType.GUNSHIP
         elif turns <= 1200 and len(self.best_solar_locations) > 0:  # 1500
             self.next_target_tower = TowerType.SOLAR_FARM
