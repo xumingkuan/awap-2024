@@ -39,11 +39,10 @@ class BotPlayer(Player):
         self.enemy_has_solar_farm_ = False
         self.last_debris = None  # (cooldown, health, turn)
         self.send_debirs_interval = 200
-<<<<<<< HEAD
         self.start_send_debris = False
-=======
         self.threat = 0
->>>>>>> bd59920a670e12988066519b94cfdf66dd5481af
+        self.opponent_max_towers = 0
+        self.sold_solar_turn = -1
 
     def is_placeable(self, x, y):
         return self.map.is_space(int(x), int(y)) and self.tower_grid[x][y] is None
@@ -182,10 +181,16 @@ class BotPlayer(Player):
             if rc.get_turn() <= 2000 and not self.is_beginning_4_gunships_1_bomber:
                 if self.beginning_4_gunships_1_bomber(rc):
                     self.is_beginning_4_gunships_1_bomber = True
-        self.send_debris(rc)
-        self.compute_next_target_tower(rc)
+        current_opponent_towers = len(rc.get_towers(rc.get_enemy_team()))
+        self.opponent_max_towers = max(self.opponent_max_towers, current_opponent_towers)
+        if current_opponent_towers <= self.opponent_max_towers - 2:
+            self.sell_solars(rc)
+            self.sold_solar_turn = rc.get_turn()
+        else:
+            self.compute_next_target_tower(rc)
         self.build_towers(rc)
         self.towers_attack(rc)
+        self.send_debris(rc)
 
     def update_guaranteed_bomber_damage(self, x, y):
         # O(|self.max_cd_to_compute| * |len(self.map.path)|)
@@ -237,6 +242,18 @@ class BotPlayer(Player):
             self.tower_grid[x][y] = TowerType.SOLAR_FARM
             return True
         return False
+
+    def sell_solar(self, rc: RobotController, x, y):
+        self.solars.remove((x, y))
+        t = self.find_tower(rc, x, y)
+        rc.sell_tower(t.id)
+        self.tower_grid[x][y] = None
+
+    def sell_solars(self, rc):
+        for s in self.solars:
+            t = self.find_tower(rc, s[0], s[1])
+            rc.sell_tower(t.id)
+            self.tower_grid[s[0]][s[1]] = None
 
     def find_tower(self, rc: RobotController, x, y):
         return rc.sense_towers_within_radius_squared(rc.get_ally_team(), x, y, 0)[0]
@@ -353,6 +370,8 @@ class BotPlayer(Player):
             self.next_target_tower = TowerType.GUNSHIP
         elif turns <= 3000 and len(rc.get_towers(rc.get_enemy_team())) == 0:
             self.next_target_tower = TowerType.REINFORCER  # auto bomber or gunship
+        elif self.sold_solar_turn != -1 and turns - self.sold_solar_turn <= 100:
+            self.next_target_tower = TowerType.REINFORCER  # auto bomber or gunship
         elif turns <= 600:  # 800
             self.next_target_tower = TowerType.SOLAR_FARM
         elif turns <= 3000 and len(self.gunships) == 0:
@@ -381,7 +400,8 @@ class BotPlayer(Player):
             self.next_target_tower = TowerType.REINFORCER
 
     def replace_with_reinforcers_or_build_gunship(self, rc: RobotController):
-        if len(rc.get_towers(rc.get_enemy_team())) == 0:
+        turns = rc.get_turn()
+        if len(rc.get_towers(rc.get_enemy_team())) == 0 or (self.sold_solar_turn != -1 and turns - self.sold_solar_turn <= 100):
             # auto bomber or gunship
             while len(self.bomber_locations) > 0 and not self.is_placeable(int(self.bomber_locations[0][0]), int(self.bomber_locations[0][1])):
                 self.bomber_locations = self.bomber_locations[1:]
@@ -511,7 +531,7 @@ class BotPlayer(Player):
             if rc.can_send_debris(cooldown, health):
                 rc.send_debris(cooldown, health)
         return
-    
+
         group_size = 2
         cooldown = 1
         health = rc.get_health(rc.get_enemy_team())
@@ -521,7 +541,7 @@ class BotPlayer(Player):
             if rc.can_send_debris(cooldown, health):
                 rc.send_debris(cooldown, health)
         return
-    
+
         if rc.can_send_debris(1, rc.get_health(rc.get_enemy_team())):
             rc.send_debris(1, rc.get_health(rc.get_enemy_team()))
         return
