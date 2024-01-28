@@ -4,8 +4,6 @@ from src.game_constants import SnipePriority, TowerType, Tile
 from src.robot_controller import RobotController
 from src.player import Player
 from src.map import Map
-from src.debris import Debris
-from src.game_state import GameState
 
 
 class BotPlayer(Player):
@@ -378,8 +376,16 @@ class BotPlayer(Player):
                     tower.current_cooldown = TowerType.BOMBER.cooldown
         return True
 
+    def enemy_has_solar_farm(self, rc : RobotController):
+        for tower in rc.get_towers(rc.get_enemy_team()):
+            if tower.type == TowerType.SOLAR_FARM:
+                return True
+        return False
+
     def send_debris(self, rc: RobotController):
         if rc.get_turn() <= 269 or rc.get_turn() % 249 < 200:
+            return
+        if not self.enemy_has_solar_farm(rc):
             return
         # (1, 51) costs 220
         # (2, 76) costs 241
