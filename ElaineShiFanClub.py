@@ -77,7 +77,6 @@ class BotPlayer(Player):
         self.bomber_locations = self.bomber_locations[
             np.array([self.map.tiles[self.bomber_locations[i][0]][self.bomber_locations[i][1]] == Tile.SPACE for i in range(len(self.bomber_locations))])]
 
-        path_extra_value = 1.8 / path_len ** 2
         remaining_len = 0
         for t in self.map.path:
             path_grid[t[0], t[1]] = 1.0 + path_extra_value * remaining_len
@@ -120,7 +119,8 @@ class BotPlayer(Player):
             self.best_solar_locations = [(x + ind1[0], y + ind1[1]) for (x, y) in self.solar_pattern_1]
         else:
             self.best_solar_locations = [(x + ind2[0], y + ind2[1]) for (x, y) in self.solar_pattern_2]
-        if self.solar_coverage_1[ind1] < 900 and self.solar_coverage_2[ind2] < 900:
+        result_value = max(self.solar_coverage_1[ind1], self.solar_coverage_2[ind2])
+        if result_value < 900:
             # do not build solar any more
             self.best_solar_locations = []
 
@@ -301,6 +301,8 @@ class BotPlayer(Player):
             self.next_target_tower = TowerType.SOLAR_FARM
         elif len(self.gunships) < 4:
             self.next_target_tower = TowerType.GUNSHIP
+        elif len(self.gunships) >= len(self.solars) * 2 and len(self.best_solar_locations) > 0:
+            self.next_target_tower = TowerType.SOLAR_FARM
         else:
             self.next_target_tower = TowerType.GUNSHIP
 
@@ -381,7 +383,7 @@ class BotPlayer(Player):
             return
         # (1, 51) costs 220
         # (2, 76) costs 241
-        cost_limit = 241 if rc.get_turn() <= 1000 else rc.get_balance(rc.get_ally_team()) // 10
+        cost_limit = 241 if rc.get_turn() <= 1000 else rc.get_balance(rc.get_ally_team()) // 10 if rc.get_turn() <= 4990 else rc.get_balance(rc.get_ally_team())
         health_cand = [25 * x + 1 for x in range(2, 100)]
         for health in reversed(sorted(health_cand)):
             if rc.get_debris_cost(15, health) > cost_limit:
