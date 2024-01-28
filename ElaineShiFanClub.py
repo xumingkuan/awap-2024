@@ -27,6 +27,8 @@ class BotPlayer(Player):
         self.best_solar_locations = []
         self.next_target_tower = TowerType.BOMBER
         self.is_beginning_2_gunships_1_bomber = False
+        self.is_beginning_3_gunships_1_bomber = False
+        self.is_beginning_4_gunships_1_bomber = False
 
     def init_grid_coverage(self):
         path_len = len(self.map.path)
@@ -117,6 +119,12 @@ class BotPlayer(Player):
         if rc.get_turn() <= 1200 and not self.is_beginning_2_gunships_1_bomber:
             if self.beginning_2_gunships_1_bomber(rc):
                 self.is_beginning_2_gunships_1_bomber = True
+        if rc.get_turn() <= 1200 and not self.is_beginning_3_gunships_1_bomber:
+            if self.beginning_3_gunships_1_bomber(rc):
+                self.is_beginning_3_gunships_1_bomber = True
+        if rc.get_turn() <= 1200 and not self.is_beginning_4_gunships_1_bomber:
+            if self.beginning_4_gunships_1_bomber(rc):
+                self.is_beginning_4_gunships_1_bomber = True
         self.send_debris(rc)
         self.compute_next_target_tower(rc)
         self.build_towers(rc)
@@ -194,13 +202,39 @@ class BotPlayer(Player):
         return ret
 
     def beginning_2_gunships_1_bomber(self, rc: RobotController):
-        debris = rc.get_debris(rc.get_ally_team())
         turns = rc.get_turn()
-        if turns >= 502 and len(rc.get_towers(rc.get_enemy_team())) == 0:  # have 2010 balance and not building anything
+        if turns >= 227 and len(rc.get_towers(rc.get_enemy_team())) == 0:  # have 3760 balance and not building anything
             return True
+        debris = rc.get_debris(rc.get_ally_team())
         cnt = 0
         for d in debris:
-            if 25 + 6 < d.health <= 25 + 25 + 6:  # 2 gunships, 1 bomber
+            if TowerType.GUNSHIP.damage + TowerType.BOMBER.damage < d.health <= TowerType.GUNSHIP.damage * 2 + TowerType.BOMBER.damage:  # 2 gunships, 1 bomber
+                cnt += 1
+        if cnt >= 3:
+            return True
+        return False
+
+    def beginning_3_gunships_1_bomber(self, rc: RobotController):
+        turns = rc.get_turn()
+        if turns >= 252 and len(rc.get_towers(rc.get_enemy_team())) == 0:  # have 4010 balance and not building anything
+            return True
+        debris = rc.get_debris(rc.get_ally_team())
+        cnt = 0
+        for d in debris:
+            if TowerType.GUNSHIP.damage * 2 + TowerType.BOMBER.damage < d.health <= TowerType.GUNSHIP.damage * 3 + TowerType.BOMBER.damage:  # 3 gunships, 1 bomber
+                cnt += 1
+        if cnt >= 3:
+            return True
+        return False
+
+    def beginning_4_gunships_1_bomber(self, rc: RobotController):
+        turns = rc.get_turn()
+        if turns >= 327 and len(rc.get_towers(rc.get_enemy_team())) == 0:  # have 4760 balance and not building anything
+            return True
+        debris = rc.get_debris(rc.get_ally_team())
+        cnt = 0
+        for d in debris:
+            if TowerType.GUNSHIP.damage * 3 + TowerType.BOMBER.damage < d.health <= TowerType.GUNSHIP.damage * 4 + TowerType.BOMBER.damage:  # 3 gunships, 1 bomber
                 cnt += 1
         if cnt >= 3:
             return True
@@ -211,6 +245,10 @@ class BotPlayer(Player):
         if len(self.bombers) == 0:
             self.next_target_tower = TowerType.BOMBER
         elif turns <= 1200 and self.is_beginning_2_gunships_1_bomber and len(self.gunships) < 2:
+            self.next_target_tower = TowerType.GUNSHIP
+        elif turns <= 1200 and self.is_beginning_3_gunships_1_bomber and len(self.gunships) < 3:
+            self.next_target_tower = TowerType.GUNSHIP
+        elif turns <= 1200 and self.is_beginning_4_gunships_1_bomber and len(self.gunships) < 4:
             self.next_target_tower = TowerType.GUNSHIP
         elif turns <= 600:  # 800
             self.next_target_tower = TowerType.SOLAR_FARM
@@ -284,11 +322,15 @@ class BotPlayer(Player):
         return True
 
     def send_debris(self, rc: RobotController):
-        if rc.get_turn() % 249 < 200:
+        if rc.get_turn() <= 269 or rc.get_turn() % 249 < 200:
             return
-        cost_limit = 50 if rc.get_turn() <= 1000 else rc.get_balance(rc.get_ally_team()) // 100
-        health_cand = [25 * x + 1 for x in range(100)] + [24]
+        # (1, 51) costs 220
+        # (2, 76) costs 241
+        cost_limit = 241 if rc.get_turn() <= 1000 else rc.get_balance(rc.get_ally_team()) // 10
+        health_cand = [25 * x + 1 for x in range(2, 100)]
         for health in reversed(sorted(health_cand)):
+            if rc.get_debris_cost(15, health) > cost_limit:
+                continue
             for cooldown in range(1, 16):
                 if rc.can_send_debris(cooldown, health) \
                         and rc.get_debris_cost(cooldown, health) <= cost_limit \
