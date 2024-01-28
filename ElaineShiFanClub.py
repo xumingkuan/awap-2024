@@ -473,6 +473,9 @@ class BotPlayer(Player):
         return False
 
     def send_debris(self, rc: RobotController):
+        if rc.can_send_debris(1, rc.get_health(rc.get_enemy_team())):
+            rc.send_debris(1, rc.get_health(rc.get_enemy_team()))
+        return
         if rc.get_turn() % self.send_debirs_interval < self.send_debirs_interval * 0.5:
             return
         if rc.get_turn() <= 269:
