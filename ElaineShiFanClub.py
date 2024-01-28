@@ -35,6 +35,7 @@ class BotPlayer(Player):
         self.is_beginning_3_gunships_1_bomber = False
         self.is_beginning_4_gunships_1_bomber = False
         self.max_cd_to_compute = min(30, 2000 // len(self.map.path) + 1)
+        self.min_cd_to_compute = 1
         self.guaranteed_bomber_damage = [[0 for _ in range(len(self.map.path))] for _ in range(self.max_cd_to_compute + 1)]
         self.enemy_has_solar_farm_ = False
         self.last_debris = None  # (cooldown, health, turn)
@@ -175,7 +176,11 @@ class BotPlayer(Player):
         self.opponent_max_towers = max(self.opponent_max_towers, current_opponent_towers)
         if rc.get_turn() <= 550 + 14 * int(self.path_len) and current_opponent_towers <= self.opponent_max_towers - 2:
             self.sell_solars(rc)
+            d = rc.get_debris(rc.get_ally_team())
             self.max_cd_to_compute = 1
+            if len(d) > 0:
+                self.max_cd_to_compute = min(d[0].total_cooldown, d[-1].total_cooldown)
+            self.min_cd_to_compute = self.max_cd_to_compute
             self.sold_solar_turn = rc.get_turn()
         if rc.get_turn() % 9 == 0 or (self.sold_solar_turn != -1 and rc.get_turn() - self.sold_solar_turn <= 100):
             if rc.get_turn() <= 1200 and not self.is_beginning_2_gunships_1_bomber:
@@ -231,7 +236,7 @@ class BotPlayer(Player):
             if (x + t[0], y + t[1]) in self.grid_to_path.keys():
                 path_locs.append(self.grid_to_path[(x + t[0], y + t[1])])
         path_locs = sorted(path_locs)
-        for i in range(1, self.max_cd_to_compute + 1):
+        for i in range(self.min_cd_to_compute, self.max_cd_to_compute + 1):
             ptr = len(path_locs) - 1
             current_damage = 0
             current_duration = 0
