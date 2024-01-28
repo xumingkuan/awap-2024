@@ -173,7 +173,7 @@ class BotPlayer(Player):
             self.compute_best_solar(rc)
         current_opponent_towers = len(rc.get_towers(rc.get_enemy_team()))
         self.opponent_max_towers = max(self.opponent_max_towers, current_opponent_towers)
-        if current_opponent_towers <= self.opponent_max_towers - 2:
+        if rc.get_turn() <= 550 + 14 * int(self.path_len) and current_opponent_towers <= self.opponent_max_towers - 2:
             self.sell_solars(rc)
             self.sold_solar_turn = rc.get_turn()
         if rc.get_turn() % 9 == 0 or (self.sold_solar_turn != -1 and rc.get_turn() - self.sold_solar_turn <= 100):
@@ -202,7 +202,7 @@ class BotPlayer(Player):
                 solar_id = i
         self.sell_solar(rc, self.solars[solar_id][0], self.solars[solar_id][1])
 
-    def update_guaranteed_bomber_damage(self, x, y):
+    def update_guaranteed_bomber_damage(self, x, y, multiplier=1):
         # O(|self.max_cd_to_compute| * |len(self.map.path)|)
         path_locs = []
         for t in self.bomber_pattern:
@@ -214,7 +214,7 @@ class BotPlayer(Player):
             current_damage = 0
             current_duration = 0
             for j in reversed(range(len(self.map.path))):
-                self.guaranteed_bomber_damage[i][j] += current_damage + current_duration // TowerType.BOMBER.cooldown * TowerType.BOMBER.damage
+                self.guaranteed_bomber_damage[i][j] += (current_damage + current_duration // TowerType.BOMBER.cooldown * TowerType.BOMBER.damage) * multiplier
                 if ptr >= 0 and j == path_locs[ptr]:
                     current_duration += i
                     ptr -= 1
@@ -325,6 +325,7 @@ class BotPlayer(Player):
                 self.bombers.remove((x, y))
                 t = self.find_tower(rc, x, y)
                 rc.sell_tower(t.id)
+                self.update_guaranteed_bomber_damage(x, y, multiplier=-1)  # cancel the update
                 rc.build_tower(TowerType.REINFORCER, x, y)
                 self.reinforcers.append((x, y))
                 self.tower_grid[x][y] = TowerType.REINFORCER
