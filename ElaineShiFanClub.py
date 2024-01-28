@@ -38,6 +38,7 @@ class BotPlayer(Player):
         self.enemy_has_solar_farm_ = False
         self.last_debris = None # (cooldown, health, turn)
         self.send_debirs_interval = 200
+        self.start_send_debris = False
 
     def is_placeable(self, x, y):
         return self.map.is_space(int(x), int(y)) and self.tower_grid[x][y] is None
@@ -473,6 +474,36 @@ class BotPlayer(Player):
         return False
 
     def send_debris(self, rc: RobotController):
+        turn = rc.get_turn()
+        cooldown = 5
+        if turn >= 3700 and turn % 200 < 100:
+            if rc.get_balance(rc.get_ally_team()) >= 100000:
+                self.start_send_debris = True
+            if not self.start_send_debris:
+                return
+            cost_limit = rc.get_balance(rc.get_ally_team()) / (100 - turn % 100)
+            l, r = 100, 1000000
+            while l + 1 < r:
+                mid = (l + r) // 2
+                if rc.get_debris_cost(cooldown, mid) > cost_limit:
+                    r = mid - 1
+                else:
+                    l = mid
+            health = l
+            if rc.can_send_debris(cooldown, health):
+                rc.send_debris(cooldown, health)
+        return
+    
+        group_size = 2
+        cooldown = 1
+        health = rc.get_health(rc.get_enemy_team())
+        if rc.get_balance(rc.get_ally_team()) >= group_size * rc.get_debris_cost(cooldown, health):
+            self.start_send_debris = True
+        if self.start_send_debris:
+            if rc.can_send_debris(cooldown, health):
+                rc.send_debris(cooldown, health)
+        return
+    
         if rc.can_send_debris(1, rc.get_health(rc.get_enemy_team())):
             rc.send_debris(1, rc.get_health(rc.get_enemy_team()))
         return
