@@ -217,6 +217,8 @@ class BotPlayer(Player):
                 self.tower_grid[x][y] = None
                 self.insert_to_gunship(x, y)
                 self.insert_to_bomber(x, y)
+                return True
+        return False
 
     def update_guaranteed_bomber_damage(self, x, y, multiplier=1):
         # O(|self.max_cd_to_compute| * |len(self.map.path)|)
