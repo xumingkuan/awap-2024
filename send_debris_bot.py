@@ -13,8 +13,8 @@ class BotPlayer(Player):
 
     def play_turn(self, rc: RobotController):
         if rc.get_turn() > 600:
-            if rc.can_send_debris(5, 101):
-                rc.send_debris(5, 101)
+            if rc.can_send_debris(7, 129):
+                rc.send_debris(7, 129)
             # if random.randint(0, 10) == 0:
             #     if rc.can_send_debris(7, 126):
             #         rc.send_debris(7, 126)
