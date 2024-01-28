@@ -11,7 +11,7 @@ class BotPlayer(Player):
         pass
 
     def play_turn(self, rc: RobotController):
-        if rc.get_turn() > 400 and rc.can_send_debris(5, 101):
+        if rc.get_turn() > 600 and rc.can_send_debris(7, 126):
             # print(rc.get_balance(rc.get_ally_team()))
-            rc.send_debris(5, 101)
+            rc.send_debris(7, 126)
             # print(rc.get_balance(rc.get_ally_team()))
