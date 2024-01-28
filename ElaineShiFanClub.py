@@ -186,8 +186,8 @@ class BotPlayer(Player):
             if rc.get_turn() <= 2000 and not self.is_beginning_4_gunships_1_bomber:
                 if self.beginning_4_gunships_1_bomber(rc):
                     self.is_beginning_4_gunships_1_bomber = True
-        if rc.get_turn() >= 4000 and (rc.get_turn() % ((3000 // (len(self.solars) + 1)) + 1) == 0 or (
-                rc.get_balance(rc.get_ally_team()) >= 5000 and rc.get_turn() % ((100 // (len(self.solars) + 1)) + 1) == 0)):
+        if rc.get_turn() >= 5000 and (rc.get_turn() % ((10000 // (len(self.solars) + 1)) + 1) == 0 or (
+                rc.get_balance(rc.get_ally_team()) >= 10000 and rc.get_turn() % ((1000 // (len(self.solars) + 1)) + 1) == 0)):
             self.sell_worst_solar(rc)
             if len(self.solars) < 10 and rc.get_balance(rc.get_ally_team()) >= 3000 and rc.get_turn() % 7 == 0:
                 self.adjust_reinforcer(rc)
@@ -203,12 +203,15 @@ class BotPlayer(Player):
         for i in range(1, len(self.solars)):
             if self.gunship_coverage[self.solars[i][0], self.solars[i][1]] > self.gunship_coverage[self.solars[solar_id][0], self.solars[solar_id][1]]:
                 solar_id = i
-        self.sell_solar(rc, self.solars[solar_id][0], self.solars[solar_id][1])
+        if self.gunship_coverage[self.solars[solar_id][0], self.solars[solar_id][1]] > 0:
+            return self.sell_solar(rc, self.solars[solar_id][0], self.solars[solar_id][1])
+        else:
+            return False
 
     def adjust_reinforcer(self, rc: RobotController):
         self.compute_best_reinforcer()
         for b in self.reinforcers:
-            if self.reinforcer_coverage[b[0], b[1]] + 1e8 + 2000 < self.gunship_coverage[b[0], b[1]] ** 1.5:
+            if self.gunship_coverage[b[0], b[1]] > 0 and self.reinforcer_coverage[b[0], b[1]] + 1e8 + 2000 < self.gunship_coverage[b[0], b[1]] ** 1.5:
                 x = int(b[0])
                 y = int(b[1])
                 self.reinforcers.remove((x, y))
