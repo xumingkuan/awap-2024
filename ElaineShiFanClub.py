@@ -273,7 +273,7 @@ class BotPlayer(Player):
 
     def insert_to_gunship(self, x, y):
         if len(self.gunship_locations) == 0:
-            self.gunship_locations = [(x, y)]
+            self.gunship_locations = np.array([(x, y)])
             return
         index = len(self.gunship_locations)
         for i in range(len(self.gunship_locations)):
@@ -287,7 +287,7 @@ class BotPlayer(Player):
 
     def insert_to_bomber(self, x, y):
         if len(self.bomber_locations) == 0:
-            self.bomber_locations = [(x, y)]
+            self.bomber_locations = np.array([(x, y)])
             return
         index = len(self.bomber_locations)
         for i in range(len(self.bomber_locations)):
