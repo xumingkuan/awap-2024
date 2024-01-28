@@ -263,9 +263,9 @@ class BotPlayer(Player):
                 index = i
                 break
         if index == len(self.gunship_locations):
-            self.gunship_locations = self.gunship_locations + [(x, y)]
+            self.gunship_locations = np.concatenate((self.gunship_locations, [(x, y)]))
         else:
-            self.gunship_locations = self.gunship_locations[:index] + [(x, y)] + self.gunship_locations[index:]
+            self.gunship_locations = np.concatenate((self.gunship_locations[:index], [(x, y)], self.gunship_locations[index:]))
 
     def insert_to_bomber(self, x, y):
         if len(self.bomber_locations) == 0:
@@ -277,9 +277,9 @@ class BotPlayer(Player):
                 index = i
                 break
         if index == len(self.bomber_locations):
-            self.bomber_locations = self.bomber_locations + [(x, y)]
+            self.bomber_locations = np.concatenate((self.bomber_locations, [(x, y)]))
         else:
-            self.bomber_locations = self.bomber_locations[:index] + [(x, y)] + self.bomber_locations[index:]
+            self.bomber_locations = np.concatenate((self.bomber_locations[:index], [(x, y)], self.bomber_locations[index:]))
 
     def sell_solar(self, rc: RobotController, x, y):
         x = int(x)
