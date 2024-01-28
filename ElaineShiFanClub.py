@@ -171,7 +171,12 @@ class BotPlayer(Player):
     def play_turn(self, rc: RobotController):
         if rc.get_turn() == 1:
             self.compute_best_solar(rc)
-        if rc.get_turn() % 9 == 0:
+        current_opponent_towers = len(rc.get_towers(rc.get_enemy_team()))
+        self.opponent_max_towers = max(self.opponent_max_towers, current_opponent_towers)
+        if current_opponent_towers <= self.opponent_max_towers - 2:
+            self.sell_solars(rc)
+            self.sold_solar_turn = rc.get_turn()
+        if rc.get_turn() % 9 == 0 or (self.sold_solar_turn != -1 and rc.get_turn() - self.sold_solar_turn <= 100):
             if rc.get_turn() <= 1200 and not self.is_beginning_2_gunships_1_bomber:
                 if self.beginning_2_gunships_1_bomber(rc):
                     self.is_beginning_2_gunships_1_bomber = True
@@ -181,13 +186,7 @@ class BotPlayer(Player):
             if rc.get_turn() <= 2000 and not self.is_beginning_4_gunships_1_bomber:
                 if self.beginning_4_gunships_1_bomber(rc):
                     self.is_beginning_4_gunships_1_bomber = True
-        current_opponent_towers = len(rc.get_towers(rc.get_enemy_team()))
-        self.opponent_max_towers = max(self.opponent_max_towers, current_opponent_towers)
-        if current_opponent_towers <= self.opponent_max_towers - 2:
-            self.sell_solars(rc)
-            self.sold_solar_turn = rc.get_turn()
-        else:
-            self.compute_next_target_tower(rc)
+        self.compute_next_target_tower(rc)
         self.build_towers(rc)
         self.towers_attack(rc)
         self.send_debris(rc)
