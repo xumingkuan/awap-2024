@@ -174,8 +174,7 @@ class BotPlayer(Player):
             self.compute_best_solar(rc)
         current_opponent_towers = len(rc.get_towers(rc.get_enemy_team()))
         self.opponent_max_towers = max(self.opponent_max_towers, current_opponent_towers)
-        if rc.get_turn() <= 550 + 14 * int(self.path_len) and current_opponent_towers <= self.opponent_max_towers - 2 and (
-                self.sold_solar_turn == -1 or rc.get_turn() - self.sold_solar_turn >= 100):
+        if current_opponent_towers <= self.opponent_max_towers - 2 and (self.sold_solar_turn == -1 or rc.get_turn() - self.sold_solar_turn >= 100):
             self.sell_solars(rc)
             d = rc.get_debris(rc.get_ally_team())
             self.max_cd_to_compute = 1
@@ -480,6 +479,8 @@ class BotPlayer(Player):
         elif turns <= 3450 and self.threat / len(self.gunships) > 50000:
             self.next_target_tower = TowerType.GUNSHIP
         elif turns <= 3450 and len(self.best_solar_locations) > 0 and len(self.solars) / self.map.width / self.map.height < 0.2:
+            self.next_target_tower = TowerType.SOLAR_FARM
+        elif turns <= 3000 + self.path_len * 20 and len(self.solars) / self.map.width / self.map.height < 0.05:
             self.next_target_tower = TowerType.SOLAR_FARM
         else:
             self.next_target_tower = TowerType.REINFORCER
