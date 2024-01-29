@@ -174,14 +174,12 @@ class BotPlayer(Player):
             self.compute_best_solar(rc)
         current_opponent_towers = len(rc.get_towers(rc.get_enemy_team()))
         self.opponent_max_towers = max(self.opponent_max_towers, current_opponent_towers)
-        if current_opponent_towers <= self.opponent_max_towers - 2:
+        if rc.get_turn() <= 550 + 14 * int(self.path_len) and current_opponent_towers <= self.opponent_max_towers - 2:
             self.sell_solars(rc)
             d = rc.get_debris(rc.get_ally_team())
             self.max_cd_to_compute = 1
             if len(d) > 0:
                 self.max_cd_to_compute = min(d[0].total_cooldown, d[-1].total_cooldown)
-                while len(self.guaranteed_bomber_damage) < self.max_cd_to_compute + 1:
-                    self.guaranteed_bomber_damage.append([0 for _ in range(len(self.map.path))])
             self.min_cd_to_compute = self.max_cd_to_compute
             self.sold_solar_turn = rc.get_turn()
         if rc.get_turn() % 9 == 0 or (self.sold_solar_turn != -1 and rc.get_turn() - self.sold_solar_turn <= 100):
